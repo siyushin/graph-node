@@ -623,6 +623,7 @@ fn execute_field(
         resolver.store.as_ref(),
         parents,
         join,
+        ctx.query.schema.as_ref(),
         field,
         multiplicity,
         ctx.query.schema.types_for_interface(),
@@ -643,6 +644,7 @@ fn fetch(
     store: &(impl QueryStore + ?Sized),
     parents: &[&mut Node],
     join: &Join<'_>,
+    schema: &ApiSchema,
     field: &a::Field,
     multiplicity: ChildMultiplicity,
     types_for_interface: &BTreeMap<EntityType, Vec<s::ObjectType>>,
@@ -660,6 +662,7 @@ fn fetch(
         max_first,
         max_skip,
         selected_attrs,
+        schema,
     )?;
     query.query_id = Some(query_id);
 

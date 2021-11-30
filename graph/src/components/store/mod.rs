@@ -161,6 +161,7 @@ pub enum EntityFilter {
     NotEndsWith(Attribute, Value),
     NotEndsWithNoCase(Attribute, Value),
     ChangeBlockGte(BlockNumber),
+    Child(String, EntityType, Box<EntityFilter>),
 }
 
 // Define some convenience methods
