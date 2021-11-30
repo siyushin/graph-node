@@ -632,7 +632,7 @@ fn execute_field(
         ctx.logger.clone(),
         resolver.store.as_ref(),
         parents,
-        join,
+        &join,
         ctx.query.schema.as_ref(),
         field,
         multiplicity,
