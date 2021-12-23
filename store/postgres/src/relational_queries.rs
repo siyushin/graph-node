@@ -847,12 +847,37 @@ impl<'a> TableJoinCollection<'a> {
             Child(field_name, entity, child_filter) => {
                 let child_table = layout.table_for_entity(entity)?;
 
-                self.join(parent_table, child_table, field_name)?;
+                self.join(
+                    parent_table,
+                    child_table,
+                    parent_table.column_for_field(field_name)?,
+                );
                 self.extend_with_filter(child_filter, child_table, layout)?;
             }
             _ => {}
         }
         Ok(())
+    }
+
+    pub fn clone_from_sort_key(&self, sort_key: &'a SortKey, root_table: &'a Table) -> Self {
+        match sort_key {
+            SortKey::Key {
+                table,
+                column,
+                value: _,
+                direction: _,
+            } => {
+                // Table is a child of the root table, join them
+                if root_table.name != table.name {
+                    let mut tjc = self.clone();
+                    tjc.join(root_table, table, column);
+                    return tjc;
+                }
+            }
+            _ => {}
+        }
+
+        self.clone()
     }
 
     fn find(&self, parent_table: &'a Table, child_table: &'a Table) -> Option<&TableJoin> {
@@ -886,13 +911,8 @@ impl<'a> TableJoinCollection<'a> {
             .to_string()
     }
 
-    fn join(
-        &mut self,
-        parent_table: &'a Table,
-        child_table: &'a Table,
-        field_name: &String,
-    ) -> Result<(), StoreError> {
-        Ok(match self.find(parent_table, child_table) {
+    fn join(&mut self, parent_table: &'a Table, child_table: &'a Table, parent_column: &'a Column) {
+        match self.find(parent_table, child_table) {
             None => {
                 let parent_prefix = self.get_or_add_prefix(parent_table);
                 let child_prefix = self.get_or_add_prefix(child_table);
@@ -902,12 +922,12 @@ impl<'a> TableJoinCollection<'a> {
                     child: child_table,
                     parent_prefix,
                     child_prefix,
-                    parent_column: parent_table.column_for_field(field_name)?,
+                    parent_column,
                     child_column: child_table.primary_key(),
                 });
             }
             Some(_) => {}
-        })
+        }
     }
 }
 
@@ -1906,7 +1926,7 @@ impl<'a> ParentLimit<'a> {
     fn restrict(&self, out: &mut AstPass<Pg>) -> QueryResult<()> {
         if let ParentLimit::Ranked(sort_key, range) = self {
             out.push_sql(" ");
-            sort_key.order_by(out, None)?;
+            sort_key.order_by(out, None, None)?;
             range.walk_ast(out.reborrow())?;
         }
         Ok(())
@@ -2358,6 +2378,7 @@ pub enum SortKey<'a> {
     IdDesc(Option<BlockRangeColumn<'a>>),
     /// Order by some other column; `column` will never be `id`
     Key {
+        table: &'a Table,
         column: &'a Column,
         value: Option<&'a str>,
         direction: &'static str,
@@ -2367,6 +2388,7 @@ pub enum SortKey<'a> {
 impl<'a> SortKey<'a> {
     fn new(
         order: EntityOrder,
+        layout: &'a Layout,
         table: &'a Table,
         filter: Option<&'a EntityFilter>,
         block: BlockNumber,
@@ -2375,12 +2397,19 @@ impl<'a> SortKey<'a> {
         const DESC: &str = "desc";
 
         fn with_key<'a>(
+            layout: &'a Layout,
             table: &'a Table,
+            entity_type: Option<EntityType>,
             attribute: String,
             filter: Option<&'a EntityFilter>,
             direction: &'static str,
             br_column: Option<BlockRangeColumn<'a>>,
         ) -> Result<SortKey<'a>, QueryExecutionError> {
+            let table = match entity_type {
+                Some(entity_type) => layout.table_for_entity(&entity_type)?,
+                None => table,
+            };
+
             let column = table.column_for_field(&attribute)?;
             if column.is_fulltext() {
                 match filter {
@@ -2388,6 +2417,7 @@ impl<'a> SortKey<'a> {
                         let sort_value = value.as_str();
 
                         Ok(SortKey::Key {
+                            table,
                             column,
                             value: sort_value,
                             direction,
@@ -2403,6 +2433,7 @@ impl<'a> SortKey<'a> {
                 }
             } else {
                 Ok(SortKey::Key {
+                    table,
                     column,
                     value: None,
                     direction,
@@ -2417,8 +2448,12 @@ impl<'a> SortKey<'a> {
         };
 
         match order {
-            EntityOrder::Ascending(attr, _) => with_key(table, attr, filter, ASC, br_column),
-            EntityOrder::Descending(attr, _) => with_key(table, attr, filter, DESC, br_column),
+            EntityOrder::Ascending(attr, _, entity_type) => {
+                with_key(layout, table, entity_type, attr, filter, ASC, br_column)
+            }
+            EntityOrder::Descending(attr, _, entity_type) => {
+                with_key(layout, table, entity_type, attr, filter, DESC, br_column)
+            }
             EntityOrder::Default => Ok(SortKey::IdAsc(br_column)),
             EntityOrder::Unordered => Ok(SortKey::None),
         }
@@ -2436,6 +2471,7 @@ impl<'a> SortKey<'a> {
                 Ok(())
             }
             SortKey::Key {
+                table: _,
                 column,
                 value: _,
                 direction: _,
@@ -2452,7 +2488,12 @@ impl<'a> SortKey<'a> {
 
     /// Generate
     ///   order by [name direction], id
-    fn order_by(&self, out: &mut AstPass<Pg>, prefix: Option<&str>) -> QueryResult<()> {
+    fn order_by(
+        &self,
+        out: &mut AstPass<Pg>,
+        prefix: Option<&str>,
+        table_join_collection: Option<TableJoinCollection>,
+    ) -> QueryResult<()> {
         let prefix = prefix.unwrap_or("");
 
         match self {
@@ -2482,12 +2523,20 @@ impl<'a> SortKey<'a> {
                 Ok(())
             }
             SortKey::Key {
+                table,
                 column,
                 value,
                 direction,
             } => {
+                let root_prefix = "c.";
+                let prefix = table_join_collection
+                    .map(|tjc| format!("{}.", tjc.get_prefix(table)))
+                    .unwrap_or(root_prefix.to_string());
+
                 out.push_sql("order by ");
-                SortKey::sort_expr(column, value, direction, out)
+
+                // Kamil: it's hardcoded but I think it should be...
+                SortKey::sort_expr(column, value, root_prefix, prefix.as_str(), direction, out)
             }
         }
     }
@@ -2508,12 +2557,13 @@ impl<'a> SortKey<'a> {
                 Ok(())
             }
             SortKey::Key {
+                table: _,
                 column,
                 value,
                 direction,
             } => {
                 out.push_sql("order by g$parent_id, ");
-                SortKey::sort_expr(column, value, direction, out)
+                SortKey::sort_expr(column, value, "", "", direction, out)
             }
         }
     }
@@ -2523,6 +2573,8 @@ impl<'a> SortKey<'a> {
     fn sort_expr(
         column: &Column,
         value: &Option<&str>,
+        root_prefix: &str,
+        prefix: &str,
         direction: &str,
         out: &mut AstPass<Pg>,
     ) -> QueryResult<()> {
@@ -2549,6 +2601,7 @@ impl<'a> SortKey<'a> {
             }
             _ => {
                 let name = column.name.as_str();
+                out.push_sql(prefix);
                 out.push_identifier(name)?;
             }
         }
@@ -2563,6 +2616,7 @@ impl<'a> SortKey<'a> {
             out.push_sql(" ");
             out.push_sql(direction);
             out.push_sql(", ");
+            out.push_sql(root_prefix);
             out.push_identifier(PRIMARY_KEY_COLUMN)?;
             out.push_sql(" ");
             out.push_sql(direction);
@@ -2605,6 +2659,7 @@ pub struct FilterQuery<'a> {
 
 impl<'a> FilterQuery<'a> {
     pub fn new(
+        layout: &'a Layout,
         collection: &'a FilterCollection,
         filter: Option<&'a EntityFilter>,
         order: EntityOrder,
@@ -2619,7 +2674,7 @@ impl<'a> FilterQuery<'a> {
         let first_table = collection
             .first_table()
             .expect("an entity query always contains at least one entity type/table");
-        let sort_key = SortKey::new(order, first_table, filter, block)?;
+        let sort_key = SortKey::new(order, layout, first_table, filter, block)?;
 
         Ok(FilterQuery {
             collection,
@@ -2690,7 +2745,12 @@ impl<'a> FilterQuery<'a> {
         write_column_names(column_names, table, &mut out)?;
         self.filtered_rows(table, filter, out.reborrow())?;
         out.push_sql("\n ");
-        self.sort_key.order_by(&mut out, Some("c."))?;
+        let join_table_collection = filter.as_ref().map(|f| {
+            f.table_join_collection
+                .clone_from_sort_key(&self.sort_key, table)
+        });
+        self.sort_key
+            .order_by(&mut out, Some("c."), join_table_collection)?;
         self.range.walk_ast(out.reborrow())?;
         out.push_sql(") c");
         Ok(())
@@ -2769,7 +2829,7 @@ impl<'a> FilterQuery<'a> {
             self.filtered_rows(table, filter, out.reborrow())?;
         }
         out.push_sql("\n ");
-        self.sort_key.order_by(&mut out, None)?;
+        self.sort_key.order_by(&mut out, None, None)?;
         self.range.walk_ast(out.reborrow())?;
 
         out.push_sql(")\n");
@@ -2791,7 +2851,7 @@ impl<'a> FilterQuery<'a> {
             out.push_bind_param::<Text, _>(&table.object.as_str())?;
         }
         out.push_sql("\n ");
-        self.sort_key.order_by(&mut out, None)?;
+        self.sort_key.order_by(&mut out, None, None)?;
         Ok(())
     }
 
@@ -2841,7 +2901,7 @@ impl<'a> FilterQuery<'a> {
             window.children_uniform(&self.sort_key, self.block, out.reborrow())?;
         }
         out.push_sql("\n");
-        self.sort_key.order_by(&mut out, None)?;
+        self.sort_key.order_by(&mut out, None, None)?;
         self.range.walk_ast(out.reborrow())?;
         out.push_sql(") c)\n");
 
