@@ -35,6 +35,7 @@ type Query {
     network: String!
     blockHash: Bytes!
   ): [CachedEthereumCall!]
+  subgraphVersions(subgraphId: String!): [SubgraphVersion!]!
 }
 
 type SubgraphIndexingStatus {
@@ -131,4 +132,11 @@ enum Feature {
   grafting
   fullTextSearch
   ipfsOnEthereumContracts
+}
+
+type SubgraphVersion {
+  """
+  Version number in SemVer format
+  """
+  version: String!
 }
