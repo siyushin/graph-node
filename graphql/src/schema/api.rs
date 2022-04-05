@@ -82,7 +82,6 @@ pub fn api_schema(input_schema: &Document, version: &Version) -> Result<Document
     // Refactor: Don't clone the schema.
     let mut schema = input_schema.clone();
     add_meta_field_type(&mut schema);
-
     add_types_for_object_types(&mut schema, &object_types, version)?;
     add_types_for_interface_types(&mut schema, &interface_types, version)?;
     add_field_arguments(&mut schema, input_schema, version)?;
