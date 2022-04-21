@@ -1,7 +1,7 @@
 use super::ProofOfIndexingEvent;
 use crate::prelude::DeploymentHash;
-use stable_hash_legacy::prelude::*;
-use stable_hash_legacy::utils::AsBytes;
+use stable_hash::{utils::AsBytes, FieldAddress, StableHash};
+use stable_hash_legacy::SequenceNumber;
 use std::collections::HashMap;
 use web3::types::{Address, H256};
 
@@ -17,17 +17,40 @@ pub struct PoI<'a> {
     pub indexer: Option<Address>,
 }
 
+impl stable_hash_legacy::StableHash for PoI<'_> {
+    fn stable_hash<H: stable_hash_legacy::StableHasher>(
+        &self,
+        mut sequence_number: H::Seq,
+        state: &mut H,
+    ) {
+        stable_hash_legacy::StableHash::stable_hash(
+            &self.causality_regions,
+            sequence_number.next_child(),
+            state,
+        );
+        stable_hash_legacy::StableHash::stable_hash(
+            &self.subgraph_id,
+            sequence_number.next_child(),
+            state,
+        );
+        stable_hash_legacy::utils::AsBytes(self.block_hash.as_bytes())
+            .stable_hash(sequence_number.next_child(), state);
+        self.indexer
+            .as_ref()
+            .map(|i| stable_hash_legacy::utils::AsBytes(i.as_bytes()))
+            .stable_hash(sequence_number.next_child(), state);
+    }
+}
+
 impl StableHash for PoI<'_> {
-    fn stable_hash<H: StableHasher>(&self, mut sequence_number: H::Seq, state: &mut H) {
-        self.causality_regions
-            .stable_hash(sequence_number.next_child(), state);
-        self.subgraph_id
-            .stable_hash(sequence_number.next_child(), state);
-        AsBytes(self.block_hash.as_bytes()).stable_hash(sequence_number.next_child(), state);
+    fn stable_hash<H: stable_hash::StableHasher>(&self, field_address: H::Addr, state: &mut H) {
+        StableHash::stable_hash(&self.causality_regions, field_address.child(0), state);
+        self.subgraph_id.stable_hash(field_address.child(1), state);
+        AsBytes(self.block_hash.as_bytes()).stable_hash(field_address.child(2), state);
         self.indexer
             .as_ref()
             .map(|i| AsBytes(i.as_bytes()))
-            .stable_hash(sequence_number.next_child(), state);
+            .stable_hash(field_address.child(3), state);
     }
 }
 
@@ -35,9 +58,23 @@ pub struct CausalityRegion<'a> {
     pub blocks: Vec<Block<'a>>,
 }
 
+impl stable_hash_legacy::StableHash for CausalityRegion<'_> {
+    fn stable_hash<H: stable_hash_legacy::StableHasher>(
+        &self,
+        mut sequence_number: H::Seq,
+        state: &mut H,
+    ) {
+        stable_hash_legacy::StableHash::stable_hash(
+            &self.blocks,
+            sequence_number.next_child(),
+            state,
+        );
+    }
+}
+
 impl StableHash for CausalityRegion<'_> {
-    fn stable_hash<H: StableHasher>(&self, mut sequence_number: H::Seq, state: &mut H) {
-        self.blocks.stable_hash(sequence_number.next_child(), state);
+    fn stable_hash<H: stable_hash::StableHasher>(&self, field_address: H::Addr, state: &mut H) {
+        StableHash::stable_hash(&self.blocks, field_address.child(0), state);
     }
 }
 
@@ -52,8 +89,22 @@ pub struct Block<'a> {
     pub events: Vec<ProofOfIndexingEvent<'a>>,
 }
 
+impl stable_hash_legacy::StableHash for Block<'_> {
+    fn stable_hash<H: stable_hash_legacy::StableHasher>(
+        &self,
+        mut sequence_number: H::Seq,
+        state: &mut H,
+    ) {
+        stable_hash_legacy::StableHash::stable_hash(
+            &self.events,
+            sequence_number.next_child(),
+            state,
+        );
+    }
+}
+
 impl StableHash for Block<'_> {
-    fn stable_hash<H: StableHasher>(&self, mut sequence_number: H::Seq, state: &mut H) {
-        self.events.stable_hash(sequence_number.next_child(), state);
+    fn stable_hash<H: stable_hash::StableHasher>(&self, field_address: H::Addr, state: &mut H) {
+        StableHash::stable_hash(&self.events, field_address.child(0), state);
     }
 }
