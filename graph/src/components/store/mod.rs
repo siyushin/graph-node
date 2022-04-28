@@ -10,7 +10,7 @@ use futures::stream::poll_fn;
 use futures::{Async, Poll, Stream};
 use graphql_parser::schema as s;
 use serde::{Deserialize, Serialize};
-use stable_hash::prelude::*;
+use stable_hash_legacy::prelude::*;
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt;
@@ -118,8 +118,8 @@ impl EntityKey {
 
 #[test]
 fn key_stable_hash() {
-    use stable_hash::crypto::SetHasher;
-    use stable_hash::utils::stable_hash;
+    use stable_hash_legacy::crypto::SetHasher;
+    use stable_hash_legacy::utils::stable_hash;
 
     #[track_caller]
     fn hashes_to(key: &EntityKey, exp: &str) {
@@ -160,6 +160,7 @@ pub enum EntityFilter {
     EndsWithNoCase(Attribute, Value),
     NotEndsWith(Attribute, Value),
     NotEndsWithNoCase(Attribute, Value),
+    ChangeBlockGte(BlockNumber),
 }
 
 // Define some convenience methods
@@ -752,6 +753,7 @@ pub enum UnfailOutcome {
     Unfailed,
 }
 
+#[derive(Clone)]
 pub struct StoredDynamicDataSource {
     pub name: String,
     pub source: Source,
@@ -835,6 +837,14 @@ impl EntityModification {
         use EntityModification::*;
         match self {
             Insert { key, .. } | Overwrite { key, .. } | Remove { key } => key,
+        }
+    }
+
+    pub fn entity(&self) -> Option<&Entity> {
+        match self {
+            EntityModification::Insert { data, .. }
+            | EntityModification::Overwrite { data, .. } => Some(data),
+            EntityModification::Remove { .. } => None,
         }
     }
 
@@ -940,5 +950,17 @@ impl AttributeNames {
             }
             (Select(a), Select(b)) => a.extend(b),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PartialBlockPtr {
+    pub number: BlockNumber,
+    pub hash: Option<BlockHash>,
+}
+
+impl From<BlockNumber> for PartialBlockPtr {
+    fn from(number: BlockNumber) -> Self {
+        Self { number, hash: None }
     }
 }

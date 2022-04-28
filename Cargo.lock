@@ -56,9 +56,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.54"
+version = "1.0.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a99269dff3bc004caa411f38845c20303f1e393ca2bd6581576fa3a7f59577d"
+checksum = "08f9b8508dccb7687a1d6c4ce66b2b0ecef467c94667de27d8d7fe1f8d2a9cdc"
 
 [[package]]
 name = "arc-swap"
@@ -1485,7 +1485,7 @@ dependencies = [
  "hex",
  "lazy_static",
  "lru_time_cache",
- "pretty_assertions 1.2.0",
+ "pretty_assertions 1.2.1",
  "semver",
  "serde",
  "serde_json",
@@ -1510,7 +1510,7 @@ dependencies = [
  "lazy_static",
  "once_cell",
  "parking_lot 0.12.0",
- "pretty_assertions 1.2.0",
+ "pretty_assertions 1.2.1",
  "stable-hash",
  "test-store",
 ]
@@ -1722,15 +1722,19 @@ name = "graph-tests"
 version = "0.26.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "bollard",
  "futures 0.3.16",
  "graph",
+ "graph-chain-ethereum",
+ "graph-chain-near",
  "graph-core",
  "graph-mock",
  "graph-node",
  "graph-store-postgres",
  "lazy_static",
  "port_check",
+ "serde_yaml",
  "slog",
  "tokio",
  "tokio-stream",
@@ -2821,9 +2825,9 @@ dependencies = [
 
 [[package]]
 name = "pretty_assertions"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57c038cb5319b9c704bf9c227c261d275bfec0ad438118a2787ce47944fb228b"
+checksum = "c89f989ac94207d048d92db058e4f6ec7342b0971fc58d1271ca148b799b3563"
 dependencies = [
  "ansi_term",
  "ctor",
@@ -3010,9 +3014,9 @@ checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
 name = "quote"
-version = "1.0.17"
+version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "632d02bff7f874a36f33ea8bb416cd484b90cc66c1194b1a1110d067a7013f58"
+checksum = "a1feb54ed693b93a84e14094943b84b7c4eae204c512b7ccb95ab0c66d278ad1"
 dependencies = [
  "proc-macro2",
 ]
@@ -3683,8 +3687,9 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "stable-hash"
-version = "0.3.1"
-source = "git+https://github.com/graphprotocol/stable-hash#752463958b369506845e89da8b831430146c61d1"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2dfeb73d08f4ae1f48059f31f53a3768fad3dc54622631e0a3eff1d07a4ca19"
 dependencies = [
  "blake3 0.3.8",
  "firestorm",
