@@ -19,7 +19,9 @@ services:
       postgres_pass: let-me-in
       postgres_db: graph-node
       ipfs: 'ipfs:5001'
-      ethereum: 'mainnet:http://host.docker.internal:8545'
+      ethereum: 'mainnet:https://rinkeby.infura.io/v3/9fbf380134274629bceffb8ab95cc430'
+      ETHEREUM_START_BLOCK: 10480000
+      GRAPH_ALLOW_NON_DETERMINISTIC_IPFS: "true"
       GRAPH_LOG: info
   ipfs:
     image: ipfs/go-ipfs:v0.4.23
