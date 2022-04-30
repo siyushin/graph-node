@@ -21,7 +21,7 @@ services:
       ipfs: 'ipfs:5001'
       GRAPH_ALLOW_NON_DETERMINISTIC_IPFS: "true"
       ethereum: 'mainnet:https://escrpc.elaphant.app'
-      ETHEREUM_START_BLOCK: 12125175
+      ETHEREUM_START_BLOCK: 12125000
       # ETHEREUM_START_BLOCK: 12187002
       GRAPH_LOG: info
   ipfs:
